@@ -49,7 +49,6 @@ def normalize(x: np.ndarray) -> np.ndarray:
 
 
 def run(data_subsets, sigma, hidden_units, friction, learning_rate, dropout_rate, l2_decay):
-    np.random.seed(233333334)
     train_cost, validation_cost = 0., 0.
     for ti in range(1):
         for cv_id in range(len(data_subsets)):
@@ -84,9 +83,25 @@ def run(data_subsets, sigma, hidden_units, friction, learning_rate, dropout_rate
 
 
 data_train_subsets = preprocess_train(pandas.read_csv("train.csv"))
-for sigma in (0.000625, 0.0025, 0.01, 0.04, 0.16):
-    for hidden_units in (8, 12, 16, 20):
+# for sigma in (0.000625, 0.0025, 0.01, 0.04, 0.16):
+#     for hidden_units in (8, 12, 16, 20):
+#         for learning_rate in (0.08, ):
+#             for l2_decay in (0.025, 0.1, 0.4):
+#                 train_cost, validation_cost = run(data_train_subsets, sigma, hidden_units, 0.1, learning_rate, 0.5, l2_decay)
+#                 print(train_cost, validation_cost)
+
+# sigma != 0.16
+
+for sigma in (0.000625 / 2, 0.000625, 0.000625 * 2):
+    for hidden_units in (6, 8, 10, 12):
         for learning_rate in (0.08, ):
-            for l2_decay in (0.025, 0.1, 0.4):
+            for l2_decay in (0.025 / 2, 0.025, 0.025 * 2):
                 train_cost, validation_cost = run(data_train_subsets, sigma, hidden_units, 0.1, learning_rate, 0.5, l2_decay)
-                print(train_cost, validation_cost)
+                print(str(train_cost) + ',' + str(validation_cost) + ',')
+
+for sigma in (0.02, 0.04, 0.08):
+    for hidden_units in (18, 20):
+        for learning_rate in (0.08, ):
+            for l2_decay in (0.2, 0.4, 0.8):
+                train_cost, validation_cost = run(data_train_subsets, sigma, hidden_units, 0.1, learning_rate, 0.5, l2_decay)
+                print(str(train_cost) + ',' + str(validation_cost) + ',')
