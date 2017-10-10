@@ -1,5 +1,6 @@
 # coding: utf-8
 
+import hashlib
 import math
 import random
 
@@ -78,30 +79,54 @@ def run(data_subsets, sigma, hidden_units, friction, learning_rate, dropout_rate
     return train_cost, validation_cost
 
 
-# print(np.sum(np.abs(nn.predict(data_train["x"]) - data_train["y"])) / data_train["y"].shape[1])
-# print(np.sum(np.abs(nn.predict(data_validation["x"]) - data_validation["y"])) / data_validation["y"].shape[1])
+def check_output_status(file_name: str, run_list_hash: str) -> int:
+    try:
+        with open(file_name, 'r') as f:
+            if f.readline().split(',')[0] == run_list_hash:
+                cnt = 0
+                while len(f.readline().split(',')) >= 2:
+                    cnt = cnt + 1
+                return cnt
+            else:
+                return -1
+    except IOError:
+        return -1
 
 
-data_train_subsets = preprocess_train(pandas.read_csv("train.csv"))
-# for sigma in (0.000625, 0.0025, 0.01, 0.04, 0.16):
-#     for hidden_units in (8, 12, 16, 20):
-#         for learning_rate in (0.08, ):
-#             for l2_decay in (0.025, 0.1, 0.4):
-#                 train_cost, validation_cost = run(data_train_subsets, sigma, hidden_units, 0.1, learning_rate, 0.5, l2_decay)
-#                 print(train_cost, validation_cost)
+def restart(data_train_subsets: list, file_name: str, run_list_hash: str, run_list: tuple):
+    with open(file_name, 'w') as f:
+        f.write(run_list_hash + ',\n')
+        f.flush()
+        for sigma, hidden_units, friction, learning_rate, dropout_rate, l2_decay in run_list:
+            train_cost, validation_cost = run(data_train_subsets, sigma, hidden_units, friction, learning_rate,
+                                              dropout_rate, l2_decay)
+            f.write(str(train_cost) + ',' + str(validation_cost) + ',\n')
+            f.flush()
 
-# sigma != 0.16
 
-for sigma in (0.000625 / 2, 0.000625, 0.000625 * 2):
-    for hidden_units in (6, 8, 10, 12):
-        for learning_rate in (0.08, ):
-            for l2_decay in (0.025 / 2, 0.025, 0.025 * 2):
-                train_cost, validation_cost = run(data_train_subsets, sigma, hidden_units, 0.1, learning_rate, 0.5, l2_decay)
-                print(str(train_cost) + ',' + str(validation_cost) + ',')
+def resume(data_train_subsets: list, file_name: str, run_list: tuple, start_pos: int):
+    run_list = run_list[start_pos:]
+    with open(file_name, 'a') as f:
+        for sigma, hidden_units, friction, learning_rate, dropout_rate, l2_decay in run_list:
+            train_cost, validation_cost = run(data_train_subsets, sigma, hidden_units, friction, learning_rate,
+                                              dropout_rate, l2_decay)
+            f.write(str(train_cost) + ',' + str(validation_cost) + ',\n')
+            f.flush()
 
-for sigma in (0.02, 0.04, 0.08):
-    for hidden_units in (18, 20):
-        for learning_rate in (0.08, ):
-            for l2_decay in (0.2, 0.4, 0.8):
-                train_cost, validation_cost = run(data_train_subsets, sigma, hidden_units, 0.1, learning_rate, 0.5, l2_decay)
-                print(str(train_cost) + ',' + str(validation_cost) + ',')
+
+def main():
+    data_train_subsets = preprocess_train(pandas.read_csv("train.csv"))
+    run_list = tuple((sigma, hidden_units, 0.1, learning_rate, 0.5, l2_decay)
+                     for sigma in (0.02, 0.04, 0.08)
+                     for hidden_units in (18, 20)
+                     for learning_rate in (0.08,)
+                     for l2_decay in (0.2, 0.4, 0.8))
+    run_list_hash = hashlib.sha256(str(run_list).encode('utf-8')).hexdigest()
+    output_status = check_output_status("output.csv", run_list_hash)
+    if output_status == -1:
+        restart(data_train_subsets, "output.csv", run_list_hash, run_list)
+    else:
+        resume(data_train_subsets, "output.csv", run_list, output_status)
+
+
+main()
