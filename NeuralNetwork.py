@@ -3,143 +3,95 @@
 import numpy as np
 
 
-class NeuralNetwork:
-    def __init__(self, layer_dims: tuple, sigma: float = 0.01):
-        self.w, self.b, self.layer_dims = [], [], layer_dims
-        for i in range(1, len(layer_dims)):
-            self.w.append(np.random.randn(layer_dims[i], layer_dims[i - 1]) * sigma)
-            self.b.append(np.zeros((layer_dims[i], 1)))
+def init(layer_dims: tuple, *, distribution: str, dev_type: str) -> (tuple, tuple):
+    w, b = [], []
+    for i in range(1, len(layer_dims)):
+        var = 0
+        if dev_type == "FAN_IN":
+            var = 1.0 / layer_dims[i - 1]
+        elif dev_type == "FAN_IN_OUT":
+            var = 2.0 / (layer_dims[i - 1] + layer_dims[i])
+        if distribution == "NORMAL":
+            w.append(np.random.randn(layer_dims[i], layer_dims[i - 1]) * np.sqrt(var))
+        elif distribution == "UNIFORM":
+            r = np.sqrt(3.0 * var)
+            w.append(np.random.uniform(-r, r, (layer_dims[i], layer_dims[i - 1])))
+        b.append(np.zeros((layer_dims[i], 1)))
+    return tuple(w), tuple(b)
 
-    def forward_propagation(self, x: np.ndarray, dropout_mask: list = None, dropout_rate: float = None,
-                            training: bool = False) -> list:
-        a = [x]
-        nl = len(self.layer_dims)
-        for l in range(1, nl - 1):
-            al = np.dot(self.w[l - 1], a[l - 1]) + self.b[l - 1]
-            np.maximum(al, 0, out=al)
-            if not (dropout_rate is None):
-                if training:
-                    al = al * dropout_mask[l]
-                else:
-                    al = al * (1. - dropout_rate)
-            a.append(al)
-        al = np.dot(self.w[nl - 2], a[nl - 2]) + self.b[nl - 2]
-        np.clip(al, -30., 30., al)
-        al = 1. / (1. + np.exp(-al))
+
+def forward_propagation(w: tuple, b: tuple, x: np.ndarray) -> tuple:
+    a = [x]
+    last = len(w)
+    for l in range(1, last):
+        al = np.dot(w[l - 1], a[l - 1]) + b[l - 1]
+        np.maximum(al, 0, out=al)
         a.append(al)
-        return a
+    al = np.dot(w[last - 1], a[last - 1]) + b[last - 1]
+    al = 1.0 / (1.0 + np.exp(-al))
+    a.append(al)
+    return tuple(a)
 
-    def back_propagation(self, y: np.ndarray, a: list, dropout_mask: list = None) -> (list, list):
-        nl = len(self.layer_dims)
-        dz, dw, db = [None] * nl, [None] * (nl - 1), [None] * (nl - 1)
-        dz[nl - 1] = (a[nl - 1] - y) / y.shape[1]
-        for l in reversed(range(nl - 1)):
-            dw[l] = np.dot(dz[l + 1], a[l].T)
-            if not (dropout_mask is None):
-                dw[l] = dw[l] * dropout_mask[l + 1]
-            db[l] = np.sum(dz[l + 1], axis=1, keepdims=True)
-            dz[l] = np.dot(self.w[l].T, dz[l + 1]) * (a[l] > 0)
-        return dw, db
 
-    @staticmethod
-    def cost(y: np.ndarray, al: np.ndarray) -> np.ndarray:
-        return -np.mean(y * np.log(al) + (1 - y) * np.log(1. - al))
+def back_propagation(w: tuple, y: np.ndarray, a: tuple) -> (tuple, tuple):
+    last = len(w)
+    dz, dw, db = [None] * (last + 1), [None] * last, [None] * last
+    dz[last] = (a[last] - y) / y.shape[1]
+    for l in reversed(range(last)):
+        dw[l] = np.dot(dz[l + 1], a[l].T)
+        db[l] = np.sum(dz[l + 1], axis=1, keepdims=True)
+        dz[l] = np.dot(w[l].T, dz[l + 1]) * (a[l] > 0)
+    return tuple(dw), tuple(db)
 
-    def gradient_check(self, x: np.ndarray, y: np.ndarray, eps: float = 1e-8):
-        nl = len(self.layer_dims)
-        dw, db = [None] * (nl - 1), [None] * (nl - 1)
-        a = self.forward_propagation(x)
-        tdw, tdb = self.back_propagation(y, a)
-        for l in range(nl - 1):
-            dw[l] = np.zeros(self.w[l].shape)
-            for i in range(self.w[l].shape[0]):
-                for j in range(self.w[l].shape[1]):
-                    self.w[l][i, j] = self.w[l][i, j] + eps
-                    a = self.forward_propagation(x)
-                    c1 = self.cost(y, a[len(a) - 1])
-                    self.w[l][i, j] = self.w[l][i, j] - eps * 2.
-                    a = self.forward_propagation(x)
-                    c2 = self.cost(y, a[len(a) - 1])
-                    self.w[l][i, j] = self.w[l][i, j] + eps
-                    dw[l][i, j] = (c1 - c2) / (eps * 2.)
-            db[l] = np.zeros(self.b[l].shape)
-            for i in range(self.b[l].shape[0]):
-                for j in range(self.b[l].shape[1]):
-                    self.b[l][i, j] = self.b[l][i, j] + eps
-                    a = self.forward_propagation(x)
-                    c1 = self.cost(y, a[len(a) - 1])
-                    self.b[l][i, j] = self.b[l][i, j] - eps * 2.
-                    a = self.forward_propagation(x)
-                    c2 = self.cost(y, a[len(a) - 1])
-                    self.b[l][i, j] = self.b[l][i, j] + eps
-                    db[l][i, j] = (c1 - c2) / (eps * 2.)
-            print(np.linalg.norm(tdw[l] - dw[l]), np.linalg.norm(tdb[l] - db[l]))
-            print(np.linalg.norm((tdw[l] - dw[l]) / dw[l]), np.linalg.norm((tdb[l] - db[l]) / db[l]))
 
-    def gradient_descent_update(self, dw: list, db: list, params=None) -> dict:
-        if params is None:
-            params = {"learning_rate": 0.7}
-        for l in range(len(self.layer_dims) - 1):
-            self.w[l] = self.w[l] - params["learning_rate"] * dw[l]
-            self.b[l] = self.b[l] - params["learning_rate"] * db[l]
-        return {}
+def cost(y: np.ndarray, al: np.ndarray) -> np.ndarray:
+    return -np.mean(y * np.log(al) + (1 - y) * np.log(1.0 - al))
 
-    def gradient_descent_momentum_update(self, dw: list, db: list, cache: dict, params=None) -> dict:
-        if params is None:
-            params = {"f": 0.1, "learning_rate": 0.02}
-        if not cache:
-            cache = {"v_w": [], "v_b": []}
-            for l in range(len(self.layer_dims) - 1):
-                cache["v_w"].append(np.zeros(self.w[l].shape))
-                cache["v_b"].append(np.zeros(self.b[l].shape))
-        for l in range(len(self.layer_dims) - 1):
-            cache["v_w"][l] = (1. - params["f"]) * cache["v_w"][l] + dw[l]
-            cache["v_b"][l] = (1. - params["f"]) * cache["v_b"][l] + db[l]
-            self.w[l] = self.w[l] - params["learning_rate"] * cache["v_w"][l]
-            self.b[l] = self.b[l] - params["learning_rate"] * cache["v_b"][l]
-        return cache
 
-    def optimize(self, x: np.ndarray, y: np.ndarray, x_cv: np.ndarray, y_cv: np.ndarray,
-                 optimization_params: dict = None, iter_num: int = 1500, dropout_rate: float = None,
-                 l2_decay: float = 0.) -> (float, float):
-        best_so_far = {"cost": np.infty, "w": None, "b": None, "iter_num": 0}
-        cache = {}
-        no_update_cnt = 0
-        for i in range(iter_num):
-            if dropout_rate is None:
-                a = self.forward_propagation(x, training=True)
-                dw, db = self.back_propagation(y, a)
-            else:
-                dropout_mask = [np.ones((x.shape[0], 1))]
-                for dim in self.layer_dims[1:-1]:
-                    dropout_mask.append(np.random.rand(dim, 1) >= dropout_rate)
-                dropout_mask.append(np.ones((self.layer_dims[-1], 1)))
-                a = self.forward_propagation(x, dropout_mask=dropout_mask, dropout_rate=dropout_rate, training=True)
-                dw, db = self.back_propagation(y, a, dropout_mask=dropout_mask)
-            for l in range(len(self.layer_dims) - 1):
-                dw[l] = dw[l] + self.w[l] * l2_decay
-                db[l] = db[l] + self.b[l] * l2_decay
-            cache = self.gradient_descent_momentum_update(dw, db, cache, optimization_params)
-            a = self.forward_propagation(x_cv, dropout_rate=dropout_rate)
-            cost = self.cost(y_cv, a[-1])
-            if cost < best_so_far["cost"]:
-                best_so_far["cost"] = cost
-                best_so_far["w"] = self.w
-                best_so_far["b"] = self.b
-                best_so_far["iter_num"] = i + 1
-                no_update_cnt = 0
-            else:
-                no_update_cnt = no_update_cnt + 1
-            if no_update_cnt % 10 == 0:
-                optimization_params["learning_rate"] = optimization_params["learning_rate"] * 0.5
-            if no_update_cnt >= 30:
-                break
-        self.w = best_so_far["w"]
-        self.b = best_so_far["b"]
-        # print(best_so_far["iter_num"])
-        return self.cost(y, self.forward_propagation(x, dropout_rate=dropout_rate)[-1]), self.cost(
-            y_cv, self.forward_propagation(x_cv, dropout_rate=dropout_rate)[-1])
+def gradient_check(w: tuple, b: tuple, x: np.ndarray, y: np.ndarray, *, eps: float = 1e-8):
+    last = len(w)
+    dw, db = [None] * last, [None] * last
+    a = forward_propagation(w, b, x)
+    tdw, tdb = back_propagation(w, y, a)
+    for l in range(last):
+        dw[l] = np.zeros(w[l].shape)
+        delta = np.zeros(w[l].shape)
+        for i in range(w[l].shape[0]):
+            for j in range(w[l].shape[1]):
+                delta[i, j] = eps
+                c1 = cost(y, forward_propagation(w[l] + delta, b[l], x)[-1])
+                c2 = cost(y, forward_propagation(w[l] - delta, b[l], x)[-1])
+                delta[i, j] = 0.0
+                dw[l][i, j] = (c1 - c2) / (eps * 2.0)
+        db[l] = np.zeros(b[l].shape)
+        delta = np.zeros(b[l].shape)
+        for i in range(w[l].shape[0]):
+            for j in range(b[l].shape[1]):
+                delta[i, j] = eps
+                c1 = cost(y, forward_propagation(w[l], b[l] + delta, x)[-1])
+                c2 = cost(y, forward_propagation(w[l], b[l] - delta, x)[-1])
+                delta[i, j] = 0.0
+                dw[l][i, j] = (c1 - c2) / (eps * 2.0)
+        print("w[%d]  std_err = %f ; b[%d]  std_err = %f" % (
+            l, np.linalg.norm(tdw[l] - dw[l]), l, np.linalg.norm(tdb[l] - db[l])))
 
-    def predict(self, x: np.ndarray, dropout_rate: float = None):
-        a = self.forward_propagation(x, dropout_rate=dropout_rate)
-        return a[len(self.layer_dims) - 1] >= 0.5
+
+def gradient_descent_momentum_update(w0: tuple, b0: tuple, vw0: tuple, vb0: tuple, dw: tuple, db: tuple, *,
+                                     friction: float, learning_rate: float) -> (tuple, tuple, tuple, tuple):
+    w, b, vw, vb = [], [], [], []
+    for l in range(len(w0)):
+        vw.append((1.0 - friction) * vw0[l] + dw[l])
+        vb.append((1.0 - friction) * vb0[l] + db[l])
+        w.append(w0[l] - learning_rate * vw[l])
+        b.append(b0[l] - learning_rate * vb[l])
+    return tuple(w), tuple(b), tuple(vw), tuple(vb)
+
+
+def optimize(w: tuple, b: tuple, x: np.ndarray, y: np.ndarray, *,
+             iter_num: int, friction: float, learning_rate: float) -> (tuple, tuple):
+    vw, vb = tuple(np.zeros(wl.shape) for wl in w), tuple(np.zeros(bl.shape) for bl in b)
+    for i in range(iter_num):
+        dw, db = back_propagation(w, y, forward_propagation(w, b, x))
+        w, b, vw, vb = gradient_descent_momentum_update(w, b, vw, vb, dw, db, friction=friction,
+                                                        learning_rate=learning_rate)
+    return w, b
