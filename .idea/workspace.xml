@@ -3,6 +3,8 @@
   <component name="ChangeListManager">
     <list default="true" id="79ea1ef5-492b-4608-80b9-291d3c223b69" name="Default" comment="">
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/main.py" afterPath="$PROJECT_DIR$/main.py" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/output.csv" afterPath="$PROJECT_DIR$/output.csv" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/submission.csv" afterPath="$PROJECT_DIR$/submission.csv" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="TRACKING_ENABLED" value="true" />
@@ -12,7 +14,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="CoverageDataManager">
-    <SUITE FILE_PATH="coverage/titanic$main.coverage" NAME="main Coverage Results" MODIFIED="1508148209140" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/titanic$main.coverage" NAME="main Coverage Results" MODIFIED="1508149481599" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
   <component name="DatabaseView">
     <option name="SHOW_INTERMEDIATE" value="true" />
@@ -30,8 +32,8 @@
       <file leaf-file-name="main.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/main.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="3040">
-              <caret line="152" column="12" lean-forward="false" selection-start-line="152" selection-start-column="12" selection-end-line="152" selection-end-column="12" />
+            <state relative-caret-position="1900">
+              <caret line="95" column="26" lean-forward="true" selection-start-line="95" selection-start-column="26" selection-end-line="95" selection-end-column="26" />
               <folding>
                 <element signature="e#17#33#0" expanded="true" />
               </folding>
@@ -52,7 +54,7 @@
       <file leaf-file-name="NeuralNetwork_old.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/NeuralNetwork_old.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="-2410">
+            <state relative-caret-position="-1180">
               <caret line="4" column="0" lean-forward="false" selection-start-line="4" selection-start-column="0" selection-end-line="4" selection-end-column="0" />
               <folding />
             </state>
@@ -435,7 +437,7 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/NeuralNetwork_old.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-2410">
+        <state relative-caret-position="-1180">
           <caret line="4" column="0" lean-forward="false" selection-start-line="4" selection-start-column="0" selection-end-line="4" selection-end-column="0" />
           <folding />
         </state>
@@ -451,8 +453,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/main.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="3040">
-          <caret line="152" column="12" lean-forward="false" selection-start-line="152" selection-start-column="12" selection-end-line="152" selection-end-column="12" />
+        <state relative-caret-position="1900">
+          <caret line="95" column="26" lean-forward="true" selection-start-line="95" selection-start-column="26" selection-end-line="95" selection-end-column="26" />
           <folding>
             <element signature="e#17#33#0" expanded="true" />
           </folding>
