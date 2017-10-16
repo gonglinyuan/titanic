@@ -12,7 +12,7 @@ import NeuralNetwork as nN
 SUBSET_NUM = 5
 
 
-def preprocess_train(data_raw) -> (np.ndarray, np.ndarray):
+def preprocess_train(data_raw: pandas.DataFrame) -> (np.ndarray, np.ndarray):
     x, y, urn = [], [], []
     for person in data_raw.get_values():
         urn.append(person)
@@ -35,7 +35,7 @@ def preprocess_train(data_raw) -> (np.ndarray, np.ndarray):
     return np.array(x).T, np.array(y).reshape((1, -1))
 
 
-def preprocess_test(data_raw) -> np.ndarray:
+def preprocess_test(data_raw: pandas.DataFrame) -> np.ndarray:
     data = []
     for person in data_raw.get_values():
         vec = [1 if person[1] == 1 else 0, 1 if person[1] == 2 else 0, 1 if person[3] == 'male' else 0]
@@ -150,62 +150,10 @@ def test():
     x_train, y_train = preprocess_train(pandas.read_csv("train.csv"))
     x_test = preprocess_test(pandas.read_csv("test.csv"))
     y_test = run_test(x_train, y_train, x_test, hidden_units=10, iter_num=1000, friction=0.1, learning_rate=0.1)
-    print(y_test)
+    pandas.DataFrame(y_test.astype(int).T,
+                     index=np.arange(y_train.shape[1] + 1, y_train.shape[1] + y_test.shape[1] + 1),
+                     columns=("Survived",)).to_csv("submission.csv", index_label="PassengerId")
 
-main()
+
+# main()
 test()
-
-# def test_main():
-#     data_train_subsets = preprocess_train(pandas.read_csv("train.csv"))
-#     data_test_x = normalize(preprocess_test(pandas.read_csv("test.csv")))
-#     run_list = ((0.000625, 12, 0.1, 0.08, 0.5, 0.0125),
-#                 (0.02, 18, 0.1, 0.08, 0.5, 0.2),
-#                 (0.02, 20, 0.1, 0.08, 0.5, 0.2))
-#     neg_exp_cost = 0.0
-#     result = []
-#     for sigma, hidden_units, friction, learning_rate, dropout_rate, l2_decay in run_list:
-#         cost, al = run_test(data_train_subsets, data_test_x, sigma, hidden_units, friction, learning_rate,
-#                             dropout_rate, l2_decay)
-#         print(al)
-#         neg_exp_cost = neg_exp_cost + np.exp(-cost)
-#         result.append((cost, al))
-#     al_total = np.zeros((1, data_test_x.shape[1]))
-#     for cost, al in result:
-#         al_total = al_total + (np.exp(-cost) / neg_exp_cost) * al
-#     print(al_total)
-#     print(al_total >= 0.5)
-#     # al1 = nn1.forward_propagation(data_test_x, dropout_rate=0.5)[-1]
-#     # al2 = nn2.forward_propagation(data_test_x, dropout_rate=0.5)[-1]
-#     # al3 = nn3.forward_propagation(data_test_x, dropout_rate=0.5)[-1]
-#     # print(al1.shape, al2.shape, al3.shape)
-#     # y = np.mean(np.concatenate((al1, al2, al3), axis=0), axis=0, keepdims=True) >= 0.5
-#     # print(y)
-
-
-# # main()
-# # test_main()
-# def test():
-#     data_train_subsets = preprocess_train(pandas.read_csv("train.csv"))
-#     for cv_id in range(len(data_train_subsets)):
-#         data_train, data_validation = {}, {}
-#         for i in range(len(data_train_subsets)):
-#             if cv_id == i:
-#                 data_validation = data_train_subsets[i]
-#             else:
-#                 if data_train:
-#                     data_train["x"] = np.concatenate((data_train["x"], data_train_subsets[i]["x"]), axis=1)
-#                     data_train["y"] = np.concatenate((data_train["y"], data_train_subsets[i]["y"]), axis=1)
-#                 else:
-#                     data_train = data_train_subsets[i]
-#         data_train["x"] = normalize(data_train["x"])
-#         data_validation["x"] = normalize(data_validation["x"])
-#         w, b = nN.init((data_train["x"].shape[0], 10, data_train["y"].shape[0]),
-#                        distribution="UNIFORM", dev_type="FAN_IN")
-#         w, b = nN.optimize(w, b, data_train["x"], data_train["y"],
-#                            iter_num=1000, friction=0.1, learning_rate=0.1)
-#         y = nN.forward_propagation(w, b, data_validation["x"])[-1]
-#         print(nN.cost(data_validation["y"], y))
-#         print(np.sum(np.logical_xor(data_validation["y"], y >= 0.5)) / y.shape[1])
-#
-#
-# test()
