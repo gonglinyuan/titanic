@@ -9,8 +9,9 @@ import pandas
 
 import neural_network.neural_network as nn
 from neural_network.Dropout import Dropout
+from neural_network.EarlyStop import EarlyStop
 
-SUBSET_NUM = 5
+SUBSET_NUM = 6
 
 
 def preprocess_train(data_raw: pandas.DataFrame) -> (np.ndarray, np.ndarray):
@@ -64,7 +65,8 @@ def normalize(x: np.ndarray, mean: np.ndarray = None, std: np.ndarray = None) ->
 
 
 def run(x: np.ndarray, y: np.ndarray, *, distribution: str, dev_type: str, hidden_units: int, iter_num: int,
-        friction: float, learning_rate: float, dropout_rate: float = None) -> (float, float):
+        friction: float, learning_rate: float, dropout_rate: float = None, early_stop_config: dict = None) -> (
+        float, float):
     train_cost, validation_cost, train_acc, validation_acc = 0.0, 0.0, 0.0, 0.0
     x = normalize(x)
     for cv_id in range(SUBSET_NUM):
@@ -74,10 +76,20 @@ def run(x: np.ndarray, y: np.ndarray, *, distribution: str, dev_type: str, hidde
         x_train, y_train = x[:, idx_train], y[:, idx_train]
         x_validate, y_validate = x[:, idx_validate], y[:, idx_validate]
         layer_dims = (x_train.shape[0], hidden_units, y_train.shape[0])
-        dropout = Dropout(rate=dropout_rate, layer_dims=layer_dims) if dropout_rate is not None else None
+        if dropout_rate is not None:
+            dropout = Dropout(rate=dropout_rate, layer_dims=layer_dims)
+        else:
+            dropout = None
+        if early_stop_config is not None:
+            early_stop = EarlyStop(x_validate, y_validate,
+                                   interval=early_stop_config["interval"], half_life=early_stop_config["half_life"],
+                                   threshold=early_stop_config["threshold"])
+        else:
+            early_stop = None
         w, b = nn.init(layer_dims, distribution=distribution, dev_type=dev_type, dropout=dropout)
         w, b = nn.optimize(w, b, x_train, y_train,
-                           iter_num=iter_num, friction=friction, learning_rate=learning_rate, dropout=dropout)
+                           iter_num=iter_num, friction=friction, learning_rate=learning_rate,
+                           dropout=dropout, early_stop=early_stop)
         y_train_p = nn.forward_propagation(w, b, x_train, training=False, dropout=dropout)[-1]
         y_validate_p = nn.forward_propagation(w, b, x_validate, training=False, dropout=dropout)[-1]
         train_cost = train_cost + nn.cost(y_train, y_train_p)
@@ -89,16 +101,27 @@ def run(x: np.ndarray, y: np.ndarray, *, distribution: str, dev_type: str, hidde
     return train_cost / SUBSET_NUM, validation_cost / SUBSET_NUM
 
 
-def run_test(x_train: np.ndarray, y_train: np.ndarray, x_test, *, distribution: str, dev_type: str, hidden_units: int,
-             iter_num: int, friction: float, learning_rate: float, dropout_rate: float = None) -> np.ndarray:
+def run_test(x_train: np.ndarray, y_train: np.ndarray, x_test, *,
+             distribution: str, dev_type: str, hidden_units: int, iter_num: int, friction: float,
+             learning_rate: float, dropout_rate: float = None, early_stop_config: dict = None) -> np.ndarray:
     mean = np.mean(np.concatenate((x_train, x_test), axis=1), axis=1, keepdims=True)
     std = np.std(np.concatenate((x_train, x_test), axis=1), axis=1, keepdims=True)
     x_train, x_test = normalize(x_train, mean, std), normalize(x_test, mean, std)
     layer_dims = (x_train.shape[0], hidden_units, y_train.shape[0])
-    dropout = Dropout(rate=dropout_rate, layer_dims=layer_dims) if dropout_rate is not None else None
+    if dropout_rate is not None:
+        dropout = Dropout(rate=dropout_rate, layer_dims=layer_dims)
+    else:
+        dropout = None
+    if early_stop_config is not None:
+        early_stop = EarlyStop(x_train, y_train,
+                               interval=early_stop_config["interval"], half_life=early_stop_config["half_life"],
+                               threshold=early_stop_config["threshold"])
+    else:
+        early_stop = None
     w, b = nn.init(layer_dims, distribution=distribution, dev_type=dev_type, dropout=dropout)
     w, b = nn.optimize(w, b, x_train, y_train,
-                       iter_num=iter_num, friction=friction, learning_rate=learning_rate, dropout=dropout)
+                       iter_num=iter_num, friction=friction, learning_rate=learning_rate, dropout=dropout,
+                       early_stop=early_stop)
     y_test_p = nn.forward_propagation(w, b, x_test, training=False, dropout=dropout)[-1]
     return y_test_p >= 0.5
 
@@ -138,9 +161,7 @@ def resume(file_name: str, run_list: tuple, start_pos: int) -> None:
 
 def main():
     x_train, y_train = preprocess_train(pandas.read_csv("train.csv"))
-    param_list = (("UNIFORM", "FAN_IN", 20, 1000, 0.1, 0.1, 0.5),
-                  ("UNIFORM", "FAN_IN", 20, 1000, 0.1, 0.1, 0.1),
-                  ("UNIFORM", "FAN_IN", 20, 1000, 0.1, 0.1, None))
+    param_list = (("UNIFORM", "FAN_IN", 20, 1000, 0.1, 0.1, None, (5, 15, 0.005)),)
     param_list_hash = hashlib.sha256(str(param_list).encode('utf-8')).hexdigest()
     output_status = check_output_status("output.csv", param_list_hash)
     run_list = tuple(map(lambda params: functools.partial(run, x=x_train, y=y_train,
@@ -150,7 +171,10 @@ def main():
                                                           iter_num=params[3],
                                                           friction=params[4],
                                                           learning_rate=params[5],
-                                                          dropout_rate=params[6]),
+                                                          dropout_rate=params[6],
+                                                          early_stop_config={"interval": params[7][0],
+                                                                             "half_life": params[7][1],
+                                                                             "threshold": params[7][2]}),
                          param_list))
     if output_status == -1:
         restart("output.csv", param_list_hash, run_list)
@@ -162,7 +186,8 @@ def test():
     x_train, y_train = preprocess_train(pandas.read_csv("train.csv"))
     x_test = preprocess_test(pandas.read_csv("test.csv"))
     y_test = run_test(x_train, y_train, x_test, distribution="UNIFORM", dev_type="FAN_IN", hidden_units=20,
-                      iter_num=1000, friction=0.1, learning_rate=0.1, dropout_rate=0.5)
+                      iter_num=1000, friction=0.1, learning_rate=0.1, dropout_rate=None,
+                      early_stop_config={"interval": 5, "half_life": 15, "threshold": 0.005})
     pandas.DataFrame(y_test.astype(int).T,
                      index=np.arange(y_train.shape[1] + 1, y_train.shape[1] + y_test.shape[1] + 1),
                      columns=("Survived",)).to_csv("submission.csv", index_label="PassengerId")

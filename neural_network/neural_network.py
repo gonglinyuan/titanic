@@ -1,8 +1,11 @@
 # coding: utf-8
 
+import functools
+
 import numpy as np
 
 from neural_network.Dropout import Dropout
+from neural_network.EarlyStop import EarlyStop
 
 
 def init(layer_dims: tuple, *, distribution: str, dev_type: str, dropout: Dropout = None) -> (tuple, tuple):
@@ -95,7 +98,8 @@ def gradient_descent_momentum_update(w0: tuple, b0: tuple, vw0: tuple, vb0: tupl
 
 
 def optimize(w: tuple, b: tuple, x: np.ndarray, y: np.ndarray, *,
-             iter_num: int, friction: float, learning_rate: float, dropout: Dropout = None) -> (tuple, tuple):
+             iter_num: int, friction: float, learning_rate: float,
+             dropout: Dropout = None, early_stop: EarlyStop = None) -> (tuple, tuple):
     vw, vb = tuple(np.zeros(wl.shape) for wl in w), tuple(np.zeros(bl.shape) for bl in b)
     for i in range(iter_num):
         if dropout is not None:
@@ -103,4 +107,12 @@ def optimize(w: tuple, b: tuple, x: np.ndarray, y: np.ndarray, *,
         dw, db = back_propagation(w, y, forward_propagation(w, b, x, training=True, dropout=dropout), dropout=dropout)
         w, b, vw, vb = gradient_descent_momentum_update(w, b, vw, vb, dw, db, friction=friction,
                                                         learning_rate=learning_rate)
+        if early_stop is not None:
+            learning_rate = early_stop.new_learning_rate(learning_rate, i, w, b,
+                                                         functools.partial(forward_propagation,
+                                                                           training=False, dropout=dropout), cost)
+            if learning_rate is None:
+                break
+    if early_stop is not None:
+        return early_stop.best_w, early_stop.best_b
     return w, b
