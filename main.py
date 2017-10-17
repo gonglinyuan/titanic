@@ -165,9 +165,9 @@ def main():
     # param_list = (("UNIFORM", "FAN_IN", 20, 1000, 0.1, 0.1, None, (5, 15, 0.005)),)
     param_list = tuple([("UNIFORM", "FAN_IN", hidden_units, 1000, 0.1, learning_rate, None, (5, half_life, 0.0))
                         for hidden_units in (8, 12, 16, 20)
-                        for learning_rate in (0.025, 0.05, 0.1, 0.2, 0.4, 0.8)
-                        for half_life in (10, 15, 20, 25, 30)])
-    print(param_list)
+                        for learning_rate in (0.5, 1.0, 2.0, 4.0, 8.0)
+                        for half_life in (15, 20, 25, 30, 35)])
+    # print(param_list)
     param_list_hash = hashlib.sha256(str(param_list).encode('utf-8')).hexdigest()
     output_status = check_output_status("output.csv", param_list_hash)
     run_list = tuple(map(lambda params: functools.partial(run, x=x_train, y=y_train,
