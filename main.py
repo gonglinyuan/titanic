@@ -11,7 +11,7 @@ import neural_network.neural_network as nn
 from neural_network.Dropout import Dropout
 from neural_network.EarlyStop import EarlyStop
 
-SUBSET_NUM = 6
+SUBSET_NUM = 5
 
 
 def preprocess_train(data_raw: pandas.DataFrame) -> (np.ndarray, np.ndarray):
@@ -81,7 +81,8 @@ def run(x: np.ndarray, y: np.ndarray, *, distribution: str, dev_type: str, hidde
         else:
             dropout = None
         if early_stop_config is not None:
-            early_stop = EarlyStop(x_validate, y_validate,
+            # TODO: change x_train, y_train to x_validate and y_validate for regularization
+            early_stop = EarlyStop(x_train, y_train,
                                    interval=early_stop_config["interval"], half_life=early_stop_config["half_life"],
                                    threshold=early_stop_config["threshold"])
         else:
@@ -97,7 +98,7 @@ def run(x: np.ndarray, y: np.ndarray, *, distribution: str, dev_type: str, hidde
         train_acc = train_acc + np.sum(np.logical_xor(y_train, y_train_p >= 0.5)) / y_train.shape[1]
         validation_acc = validation_acc + np.sum(np.logical_xor(y_validate, y_validate_p >= 0.5)) / y_validate.shape[1]
     train_acc, validation_acc = 1.0 - train_acc / SUBSET_NUM, 1.0 - validation_acc / SUBSET_NUM
-    print(train_acc, validation_acc)
+    # print(train_acc, validation_acc)
     return train_cost / SUBSET_NUM, validation_cost / SUBSET_NUM
 
 
@@ -161,7 +162,12 @@ def resume(file_name: str, run_list: tuple, start_pos: int) -> None:
 
 def main():
     x_train, y_train = preprocess_train(pandas.read_csv("train.csv"))
-    param_list = (("UNIFORM", "FAN_IN", 20, 1000, 0.1, 0.1, None, (5, 15, 0.005)),)
+    # param_list = (("UNIFORM", "FAN_IN", 20, 1000, 0.1, 0.1, None, (5, 15, 0.005)),)
+    param_list = tuple([("UNIFORM", "FAN_IN", hidden_units, 1000, 0.1, learning_rate, None, (5, half_life, 0.0))
+                        for hidden_units in (8, 12, 16, 20)
+                        for learning_rate in (0.025, 0.05, 0.1, 0.2, 0.4, 0.8)
+                        for half_life in (10, 15, 20, 25, 30)])
+    print(param_list)
     param_list_hash = hashlib.sha256(str(param_list).encode('utf-8')).hexdigest()
     output_status = check_output_status("output.csv", param_list_hash)
     run_list = tuple(map(lambda params: functools.partial(run, x=x_train, y=y_train,

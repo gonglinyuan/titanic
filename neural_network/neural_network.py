@@ -55,7 +55,10 @@ def back_propagation(w: tuple, y: np.ndarray, a: tuple, *, dropout: Dropout = No
 
 
 def cost(y: np.ndarray, al: np.ndarray) -> np.ndarray:
-    return -np.mean(y * np.log(al) + (1 - y) * np.log(1.0 - al))
+    def stable_log(x: np.ndarray):
+        return np.log(np.maximum(x, 1e-20))
+    # return -np.mean(y * np.log(al) + (1 - y) * np.log(1.0 - al))
+    return -np.mean(y * stable_log(al) + (1 - y) * stable_log(1.0 - al))
 
 
 def gradient_check(w: tuple, b: tuple, x: np.ndarray, y: np.ndarray, *, eps: float = 1e-8):

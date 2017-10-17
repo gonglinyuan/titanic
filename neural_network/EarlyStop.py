@@ -17,7 +17,7 @@ class EarlyStop:
         if epoch % self.interval == 0:
             cur_cost = cost(self.y, forward_propagation(w, b, self.x)[-1])
             # print(cur_cost)
-            if self.best_cost is None or cur_cost < self.best_cost:
+            if self.best_cost is None or cur_cost <= self.best_cost:
                 self.best_cost, self.best_epoch, self.best_w, self.best_b, self.counter = cur_cost, epoch, w, b, 0
             else:
                 self.counter = self.counter + 1
@@ -25,6 +25,6 @@ class EarlyStop:
                     self.counter = 0
                     learning_rate = learning_rate / 2.0
                     if learning_rate < self.threshold:
-                        print("epoch = ", epoch)
+                        # print("epoch = ", epoch)
                         return None
         return learning_rate
