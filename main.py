@@ -173,9 +173,12 @@ def resume(file_name: str, run_list: tuple, start_pos: int) -> None:
 def main():
     x_train, y_train = preprocess_train(pandas.read_csv("train.csv"))
     # param_list = (("UNIFORM", "FAN_IN", 20, 1000, 0.1, 0.1, None, (5, 15, 0.005)),)
-    param_list = tuple([("UNIFORM", "FAN_IN", hidden_units, 1000, 0.1, 0.7, None, None, l2_decay)
+    param_list = tuple([("UNIFORM", "FAN_IN", hidden_units, 1000, 0.1, 0.7, dropout_rate, (5, 25, 0.0), l2_decay)
+                        for dropout_rate in (None, 0.5)
                         for hidden_units in (8, 12, 16, 20)
-                        for l2_decay in (0.001, 0.01, 0.1)])
+                        for l2_decay in (None, 0.0, 0.001, 0.002, 0.004, 0.008, 0.016, 0.032, 0.064, 0.128,
+                                         0.256, 0.512, 1.024, 2.048, 4.096, 8.192, 16.384, 32.768, 65.536, 131.072,
+                                         262.144, 524.288)])
     # print(param_list)
     param_list_hash = hashlib.sha256(str(param_list).encode('utf-8')).hexdigest()
     output_status = check_output_status("output.csv", param_list_hash)

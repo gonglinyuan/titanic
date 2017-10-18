@@ -54,7 +54,7 @@ def back_propagation(w: tuple, y: np.ndarray, a: tuple, *, dropout: Dropout = No
         db[l] = np.sum(dz[l + 1], axis=1, keepdims=True)
         dz[l] = np.dot(w[l].T, dz[l + 1]) * (a[l] > 0)
     if l2_decay is not None:
-        dw = l2_decay.back_propagation(tuple(dw), w)
+        dw = l2_decay.back_propagation(tuple(dw), w, y.shape[1])
     return tuple(dw), tuple(db)
 
 
@@ -123,6 +123,9 @@ def optimize(w: tuple, b: tuple, x: np.ndarray, y: np.ndarray, *,
                                                                            training=False, dropout=dropout), cost)
             if learning_rate is None:
                 break
+    # if l2_decay is not None:
+    #     print(cost(y, forward_propagation(w, b, x, training=False, dropout=dropout)[-1]) /
+    #           l2_decay.weight_variance(w, y.shape[1]))
     if early_stop is not None:
         return early_stop.best_w, early_stop.best_b
     return w, b
