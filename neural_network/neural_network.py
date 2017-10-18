@@ -6,6 +6,7 @@ import numpy as np
 
 from neural_network.Dropout import Dropout
 from neural_network.EarlyStop import EarlyStop
+from neural_network.L2Decay import L2Decay
 
 
 def init(layer_dims: tuple, *, distribution: str, dev_type: str, dropout: Dropout = None) -> (tuple, tuple):
@@ -41,7 +42,8 @@ def forward_propagation(w: tuple, b: tuple, x: np.ndarray, *, training: bool, dr
     return tuple(a)
 
 
-def back_propagation(w: tuple, y: np.ndarray, a: tuple, *, dropout: Dropout = None) -> (tuple, tuple):
+def back_propagation(w: tuple, y: np.ndarray, a: tuple, *, dropout: Dropout = None, l2_decay: L2Decay = None) -> (
+        tuple, tuple):
     last = len(w)
     dz, dw, db = [None] * (last + 1), [None] * last, [None] * last
     dz[last] = (a[last] - y) / y.shape[1]
@@ -51,17 +53,21 @@ def back_propagation(w: tuple, y: np.ndarray, a: tuple, *, dropout: Dropout = No
             dw[l] = dropout.back_propagation(dw[l], layer=l)
         db[l] = np.sum(dz[l + 1], axis=1, keepdims=True)
         dz[l] = np.dot(w[l].T, dz[l + 1]) * (a[l] > 0)
+    if l2_decay is not None:
+        dw = l2_decay.back_propagation(tuple(dw), w)
     return tuple(dw), tuple(db)
 
 
 def cost(y: np.ndarray, al: np.ndarray) -> np.ndarray:
     def stable_log(x: np.ndarray):
         return np.log(np.maximum(x, 1e-20))
+
     # return -np.mean(y * np.log(al) + (1 - y) * np.log(1.0 - al))
     return -np.mean(y * stable_log(al) + (1 - y) * stable_log(1.0 - al))
 
 
 def gradient_check(w: tuple, b: tuple, x: np.ndarray, y: np.ndarray, *, eps: float = 1e-8):
+    """Does not support L2 decay"""
     last = len(w)
     dw, db = [None] * last, [None] * last
     a = forward_propagation(w, b, x, training=True)
@@ -102,12 +108,13 @@ def gradient_descent_momentum_update(w0: tuple, b0: tuple, vw0: tuple, vb0: tupl
 
 def optimize(w: tuple, b: tuple, x: np.ndarray, y: np.ndarray, *,
              iter_num: int, friction: float, learning_rate: float,
-             dropout: Dropout = None, early_stop: EarlyStop = None) -> (tuple, tuple):
+             dropout: Dropout = None, early_stop: EarlyStop = None, l2_decay: L2Decay = None) -> (tuple, tuple):
     vw, vb = tuple(np.zeros(wl.shape) for wl in w), tuple(np.zeros(bl.shape) for bl in b)
     for i in range(iter_num):
         if dropout is not None:
             dropout = dropout.sample()
-        dw, db = back_propagation(w, y, forward_propagation(w, b, x, training=True, dropout=dropout), dropout=dropout)
+        dw, db = back_propagation(w, y, forward_propagation(w, b, x, training=True, dropout=dropout),
+                                  dropout=dropout, l2_decay=l2_decay)
         w, b, vw, vb = gradient_descent_momentum_update(w, b, vw, vb, dw, db, friction=friction,
                                                         learning_rate=learning_rate)
         if early_stop is not None:
