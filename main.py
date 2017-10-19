@@ -107,34 +107,43 @@ def run(x: np.ndarray, y: np.ndarray, *, distribution: str, dev_type: str, hidde
     return train_cost / SUBSET_NUM, validation_cost / SUBSET_NUM
 
 
-def run_test(x_train: np.ndarray, y_train: np.ndarray, x_test, *,
+def run_test(x: np.ndarray, y: np.ndarray, x_test, *,
              distribution: str, dev_type: str, hidden_units: int, iter_num: int, friction: float,
              learning_rate: float, dropout_rate: float = None, early_stop_config: dict = None,
              l2_decay_factor: float = None) -> np.ndarray:
-    mean = np.mean(np.concatenate((x_train, x_test), axis=1), axis=1, keepdims=True)
-    std = np.std(np.concatenate((x_train, x_test), axis=1), axis=1, keepdims=True)
-    x_train, x_test = normalize(x_train, mean, std), normalize(x_test, mean, std)
-    layer_dims = (x_train.shape[0], hidden_units, y_train.shape[0])
+    mean = np.mean(np.concatenate((x, x_test), axis=1), axis=1, keepdims=True)
+    std = np.std(np.concatenate((x, x_test), axis=1), axis=1, keepdims=True)
+    x, x_test = normalize(x, mean, std), normalize(x_test, mean, std)
+    layer_dims = (x.shape[0], hidden_units, y.shape[0])
     if dropout_rate is not None:
         dropout = Dropout(rate=dropout_rate, layer_dims=layer_dims)
     else:
         dropout = None
     if early_stop_config is not None:
-        early_stop = EarlyStop(x_train, y_train,
+        idx_train = np.ones(x.shape[1], np.bool)
+        idx_train[np.random.choice(x.shape[1], x.shape[1] // SUBSET_NUM, replace=False)] = 0
+        idx_validate = np.logical_not(idx_train)
+        x_train, y_train = x[:, idx_train], y[:, idx_train]
+        x_validate, y_validate = x[:, idx_validate], y[:, idx_validate]
+        early_stop = EarlyStop(x_validate, y_validate,
                                interval=early_stop_config["interval"], half_life=early_stop_config["half_life"],
                                threshold=early_stop_config["threshold"])
     else:
+        x_train, y_train = x, y
         early_stop = None
     if l2_decay_factor is not None:
         l2_decay = L2Decay(factor=l2_decay_factor)
     else:
         l2_decay = None
     w, b = nn.init(layer_dims, distribution=distribution, dev_type=dev_type, dropout=dropout)
-    w, b = nn.optimize(w, b, x_train, y_train,
-                       iter_num=iter_num, friction=friction, learning_rate=learning_rate, dropout=dropout,
+    nn.optimize(w, b, x_train, y_train,
+                iter_num=iter_num, friction=friction, learning_rate=learning_rate, dropout=dropout,
+                early_stop=early_stop, l2_decay=l2_decay)
+    w, b = nn.optimize(w, b, x, y,
+                       iter_num=early_stop.best_epoch, friction=friction, learning_rate=learning_rate, dropout=dropout,
                        early_stop=early_stop, l2_decay=l2_decay)
     y_test_p = nn.forward_propagation(w, b, x_test, training=False, dropout=dropout)[-1]
-    return y_test_p >= 0.5
+    return y_test_p
 
 
 def check_output_status(file_name: str, param_list_hash: str) -> int:
@@ -170,15 +179,18 @@ def resume(file_name: str, run_list: tuple, start_pos: int) -> None:
             f.flush()
 
 
+def ensemble(run_list: tuple) -> np.ndarray:
+    return np.mean([fun() for fun in run_list], axis=0) >= 0.5
+
+
 def main():
     x_train, y_train = preprocess_train(pandas.read_csv("train.csv"))
     # param_list = (("UNIFORM", "FAN_IN", 20, 1000, 0.1, 0.1, None, (5, 15, 0.005)),)
-    param_list = tuple([("UNIFORM", "FAN_IN", hidden_units, 1000, 0.1, 0.7, dropout_rate, (5, 25, 0.0), l2_decay)
-                        for dropout_rate in (None, 0.5)
-                        for hidden_units in (8, 12, 16, 20)
-                        for l2_decay in (None, 0.0, 0.001, 0.002, 0.004, 0.008, 0.016, 0.032, 0.064, 0.128,
-                                         0.256, 0.512, 1.024, 2.048, 4.096, 8.192, 16.384, 32.768, 65.536, 131.072,
-                                         262.144, 524.288)])
+    param_list = (("UNIFORM", "FAN_IN", 16, 1000, 0.1, 0.7, None, (5, 25, 0.0), 4.096),
+                  ("UNIFORM", "FAN_IN", 20, 1000, 0.1, 0.7, 0.5, (5, 25, 0.0), 0.016),
+                  ("UNIFORM", "FAN_IN", 20, 1000, 0.1, 0.7, 0.5, (5, 25, 0.0), 0.064),
+                  ("UNIFORM", "FAN_IN", 20, 1000, 0.1, 0.7, 0.5, (5, 25, 0.0), 0.128),
+                  ("UNIFORM", "FAN_IN", 20, 1000, 0.1, 0.7, 0.5, (5, 25, 0.0), 1.024))
     # print(param_list)
     param_list_hash = hashlib.sha256(str(param_list).encode('utf-8')).hexdigest()
     output_status = check_output_status("output.csv", param_list_hash)
@@ -205,13 +217,30 @@ def main():
 def test():
     x_train, y_train = preprocess_train(pandas.read_csv("train.csv"))
     x_test = preprocess_test(pandas.read_csv("test.csv"))
-    y_test = run_test(x_train, y_train, x_test, distribution="UNIFORM", dev_type="FAN_IN", hidden_units=20,
-                      iter_num=1000, friction=0.1, learning_rate=0.1, dropout_rate=None,
-                      early_stop_config={"interval": 5, "half_life": 15, "threshold": 0.005})
+    param_list = (("UNIFORM", "FAN_IN", 16, 1000, 0.1, 0.7, None, (5, 25, 0.0), 4.096),
+                  ("UNIFORM", "FAN_IN", 20, 1000, 0.1, 0.7, 0.5, (5, 25, 0.0), 0.016),
+                  ("UNIFORM", "FAN_IN", 20, 1000, 0.1, 0.7, 0.5, (5, 25, 0.0), 0.064),
+                  ("UNIFORM", "FAN_IN", 20, 1000, 0.1, 0.7, 0.5, (5, 25, 0.0), 0.128),
+                  ("UNIFORM", "FAN_IN", 20, 1000, 0.1, 0.7, 0.5, (5, 25, 0.0), 1.024))
+    run_list = tuple(map(lambda params: functools.partial(run_test, x=x_train, y=y_train, x_test=x_test,
+                                                          distribution=params[0],
+                                                          dev_type=params[1],
+                                                          hidden_units=params[2],
+                                                          iter_num=params[3],
+                                                          friction=params[4],
+                                                          learning_rate=params[5],
+                                                          dropout_rate=params[6],
+                                                          early_stop_config=None if params[7] is None else
+                                                          {"interval": params[7][0],
+                                                           "half_life": params[7][1],
+                                                           "threshold": params[7][2]},
+                                                          l2_decay_factor=params[8]),
+                         param_list))
+    y_test = ensemble(run_list)
     pandas.DataFrame(y_test.astype(int).T,
                      index=np.arange(y_train.shape[1] + 1, y_train.shape[1] + y_test.shape[1] + 1),
                      columns=("Survived",)).to_csv("submission.csv", index_label="PassengerId")
 
 
-main()
-# test()
+# main()
+test()
